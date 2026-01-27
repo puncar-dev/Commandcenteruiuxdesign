@@ -4,7 +4,14 @@ import {
   PanelRight,
   Maximize2,
   Minimize2,
-  Layout
+  Layout,
+  MessageSquare,
+  FileText,
+  Activity,
+  Bot,
+  Plus,
+  Check,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Chat, Agent, Run, Message, Tab, TabType } from "@/types";
@@ -43,8 +50,10 @@ const INITIAL_CHATS: Chat[] = [
 import Sidebar from "@/app/components/Sidebar";
 import ChatTimeline from "@/app/components/ChatTimeline";
 import RightPanel from "@/app/components/RightPanel";
-import TerminalPanel, { TerminalLog } from "@/app/components/TerminalPanel";
+import TerminalPanel, { TerminalLog, LogCategory } from "@/app/components/TerminalPanel";
 import GlobalNavigation from "@/app/components/GlobalNavigation";
+
+type MobileView = 'chats' | 'thread' | 'artifacts';
 
 export default function App() {
   // Global State
@@ -55,7 +64,10 @@ export default function App() {
   // Layout State
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
-  const [globalNavExpanded, setGlobalNavExpanded] = useState(true); // Default to expanded
+  const [globalNavExpanded, setGlobalNavExpanded] = useState(true); 
+  
+  // Mobile Layout State
+  const [mobileView, setMobileView] = useState<MobileView>('thread');
 
   // Right Panel State
   const [tabs, setTabs] = useState<Tab[]>([]);
@@ -68,13 +80,14 @@ export default function App() {
   const activeChat = chats.find(c => c.id === activeChatId) || chats[0];
   const selectedAgentIds = activeChat.selectedAgentIds || [];
 
-  const addLog = (message: string, agentId?: string, level: TerminalLog['level'] = 'info') => {
+  const addLog = (message: string, agentId?: string, level: TerminalLog['level'] = 'info', category: LogCategory = 'system') => {
       setLogs(prev => [...prev, {
           id: Date.now().toString() + Math.random(),
           timestamp: Date.now(),
           message,
           agentId,
-          level
+          level,
+          category
       }]);
   };
 
@@ -84,6 +97,33 @@ export default function App() {
             ? { ...c, selectedAgentIds: newAgentIds }
             : c
       ));
+  };
+
+  const handleDirectChat = (agentId: string) => {
+    const agent = agents.find(a => a.id === agentId);
+    if (!agent) return;
+
+    const existingChat = chats.find(c => 
+        c.selectedAgentIds.length === 1 && 
+        c.selectedAgentIds[0] === agentId &&
+        c.title.startsWith("Chat with")
+    );
+
+    if (existingChat) {
+        setActiveChatId(existingChat.id);
+    } else {
+        const newChat: Chat = {
+            id: `dm-${Date.now()}`,
+            title: `Chat with ${agent.name}`,
+            lastActivity: Date.now(),
+            messages: [],
+            runs: [],
+            selectedAgentIds: [agentId]
+        };
+        setChats([newChat, ...chats]);
+        setActiveChatId(newChat.id);
+    }
+    setMobileView('thread');
   };
 
   // Actions
@@ -127,31 +167,38 @@ export default function App() {
     
     // Auto-open terminal on run
     setTerminalOpen(true);
-    addLog(`Run started: ${text.substring(0, 30)}...`, 'System', 'info');
+    addLog(`Run started: ${text.substring(0, 30)}...`, 'System', 'info', 'system');
 
     // 5. Simulate Agent Responses (Mock)
     if (selectedAgentIds.length > 0) {
-        // Simulate some "moves" / logs
+        // Simulate some "moves" / logs with different categories
         setTimeout(() => {
-            addLog("Fetching market data for potential entry...", selectedAgentIds[0], 'info');
+            addLog("Fetching market data for potential entry...", selectedAgentIds[0], 'info', 'analysis');
         }, 500);
+
+        setTimeout(() => {
+            addLog("Scanning recent X posts for ticker mentions...", selectedAgentIds[0], 'info', 'post');
+        }, 800);
 
         setTimeout(() => {
             // First completion
             completeRunPartial(newRun.id, selectedAgentIds[0], "I've analyzed the market structure. It looks bullish.");
-            addLog("Market structure analysis complete. Bias: Bullish", selectedAgentIds[0], 'success');
-            addLog("Checking resistance levels at 45k...", selectedAgentIds[0], 'info');
+            addLog("Market structure analysis complete. Bias: Bullish", selectedAgentIds[0], 'success', 'analysis');
+            addLog("Resistance at 45k confirmed by order book.", selectedAgentIds[0], 'info', 'analysis');
         }, 1500);
 
         if (selectedAgentIds.length > 1) {
              setTimeout(() => {
-                addLog("Evaluating risk exposure for current portfolio...", selectedAgentIds[1], 'warning');
+                addLog("Evaluating risk exposure for current portfolio...", selectedAgentIds[1], 'warning', 'analysis');
             }, 2000);
 
             setTimeout(() => {
                 // Second completion
                 completeRunPartial(newRun.id, selectedAgentIds[1], "Risk parameters are within safe limits. Recommend 5% allocation.");
-                addLog("Risk check passed. Allocation recommended: 5%", selectedAgentIds[1], 'success');
+                addLog("Risk check passed. Allocation recommended: 5%", selectedAgentIds[1], 'success', 'analysis');
+                
+                // Simulate a "Trade" log
+                addLog("EXECUTING BUY ORDER: BTC-PERP @ 65420 Size: 0.5 BTC", selectedAgentIds[1], 'success', 'trade');
             }, 2500);
         }
     }
@@ -159,7 +206,7 @@ export default function App() {
      setTimeout(() => {
         // Final completion & cleanup
         finishRun(newRun.id);
-        addLog("Run completed successfully.", 'System', 'success');
+        addLog("Run completed successfully.", 'System', 'success', 'system');
     }, 3500);
   };
 
@@ -210,179 +257,339 @@ export default function App() {
       };
       setTabs(prev => [...prev, newTab]);
       setActiveTabId(newTab.id);
-      setRightSidebarOpen(true); // Auto open when a tab is added
+      setRightSidebarOpen(true); // Auto open when a tab is added on desktop
+      setMobileView('artifacts'); // Auto switch to artifacts on mobile
+  };
+
+  const handleAddAgent = (agentId: string) => {
+      if (!selectedAgentIds.includes(agentId)) {
+          updateActiveChatAgents([...selectedAgentIds, agentId]);
+      }
   };
 
   return (
-    <div className="flex h-screen w-full bg-background text-foreground overflow-hidden font-sans">
+    <div className="flex h-screen w-full bg-background text-foreground overflow-hidden font-sans flex-col md:flex-row pb-16 md:pb-0">
       <GlobalNavigation activeItem="Command Center" collapsed={!globalNavExpanded} />
       
-      {/* Workspace Area */}
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Left Sidebar (Chats) */}
-        {leftSidebarOpen && (
-            <Sidebar 
-                chats={chats} 
-                activeChatId={activeChatId} 
-                onSelectChat={setActiveChatId}
-                agents={agents}
-                selectedAgentIds={selectedAgentIds}
-                onToggleAgent={(id) => {
-                    const currentIds = activeChat.selectedAgentIds || [];
-                    const newIds = currentIds.includes(id) 
-                        ? currentIds.filter(x => x !== id) 
-                        : [...currentIds, id];
-                    updateActiveChatAgents(newIds);
-                }}
-                onNewChat={() => {
-                    const newChat: Chat = {
-                        id: `c-${Date.now()}`,
-                        title: "New Task",
-                        lastActivity: Date.now(),
-                        messages: [],
-                        runs: [],
-                        selectedAgentIds: agents.map(a => a.id) // Default to all agents for new chat
-                    };
-                    setChats([newChat, ...chats]);
-                    setActiveChatId(newChat.id);
-                }}
-                onNewAgent={() => {
-                    const colors = ["bg-blue-500", "bg-red-500", "bg-purple-500", "bg-green-500", "bg-yellow-500", "bg-pink-500", "bg-indigo-500", "bg-cyan-500"];
-                    const randomColor = colors[Math.floor(Math.random() * colors.length)];
-                    const newAgent: Agent = {
-                        id: `a-${Date.now()}`,
-                        name: "New Agent",
-                        role: "Worker",
-                        status: "idle",
-                        color: randomColor,
-                        avatar: "NA"
-                    };
-                    setAgents(prev => [...prev, newAgent]);
-                    
-                    // Add new agent to current chat's selection automatically
-                    updateActiveChatAgents([...selectedAgentIds, newAgent.id]);
-                }}
-            />
-        )}
+      {/* Mobile Header (Persistent) */}
+      <div className="md:hidden flex flex-col border-b border-border bg-background shrink-0 z-50">
+          {/* Logo Bar */}
+          <div className="h-14 flex items-center px-4 justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-[10px]">
+                        <Bot className="w-4 h-4" />
+                </div>
+                <span className="font-bold text-lg text-blue-600 tracking-tight">babylon</span>
+              </div>
+              
+              {/* Terminal Quick Access (Toggle for bottom split) */}
+               <button 
+                onClick={() => setTerminalOpen(!terminalOpen)}
+                className={cn(
+                    "text-xs font-medium flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors",
+                    terminalOpen ? "bg-blue-600 text-white" : "bg-muted/50 text-muted-foreground"
+                )}
+            >
+                <Activity className="w-3.5 h-3.5" />
+                <span>{logs.length}</span>
+             </button>
+          </div>
 
-        {/* Center Panel (Timeline + Header) */}
-        <main className="flex-1 flex flex-col min-w-0 border-r border-border relative">
-            <header className="h-12 border-b border-border flex items-center px-4 justify-between shrink-0 bg-background">
-                <div className="flex items-center gap-3">
-                     {!globalNavExpanded && (
-                         <button 
-                            onClick={() => setGlobalNavExpanded(true)}
-                            className="text-muted-foreground hover:text-foreground transition-colors"
-                            title="Expand Navigation"
-                        >
-                            <Layout className="w-4 h-4" />
-                        </button>
-                     )}
-                    <button 
-                        onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
-                        className={cn(
-                            "text-muted-foreground hover:text-foreground transition-colors",
-                            !leftSidebarOpen && "text-primary"
-                        )}
-                        title="Toggle Chat Sidebar"
-                    >
-                        <PanelLeft className="w-4 h-4" />
-                    </button>
-                    <h1 className="font-medium text-sm text-foreground/80 ml-2">{activeChat.title}</h1>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                    <button 
-                        onClick={() => setGlobalNavExpanded(!globalNavExpanded)}
-                        className={cn(
-                            "text-muted-foreground hover:text-foreground transition-colors",
-                             !globalNavExpanded && "hidden"
-                        )}
-                        title="Collapse Navigation"
-                    >
-                        <Minimize2 className="w-3.5 h-3.5" />
-                    </button>
-                    
-                     <button 
-                        onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
-                        className={cn(
-                            "text-muted-foreground hover:text-foreground transition-colors",
-                            !rightSidebarOpen && "text-primary"
-                        )}
-                        title="Toggle Artifacts Panel"
-                    >
-                        <PanelRight className="w-4 h-4" />
-                    </button>
-                </div>
-            </header>
+          {/* Persistent View Switcher (Tabs) */}
+          <div className="flex w-full px-2 pb-2">
+              <div className="w-full flex p-1 bg-muted/20 rounded-lg border border-border/50">
+                 <button 
+                    onClick={() => setMobileView('chats')}
+                    className={cn(
+                        "flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all", 
+                        mobileView === 'chats' ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                    )}
+                >
+                     <MessageSquare className="w-4 h-4" />
+                     <span>Agents</span>
+                 </button>
+                 <button 
+                    onClick={() => setMobileView('thread')}
+                    className={cn(
+                        "flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all", 
+                        mobileView === 'thread' ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                    )}
+                >
+                     <Bot className="w-4 h-4" />
+                     <span>Chat</span>
+                 </button>
+                 <button 
+                    onClick={() => setMobileView('artifacts')}
+                    className={cn(
+                        "flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all relative", 
+                        mobileView === 'artifacts' ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                    )}
+                >
+                     <FileText className="w-4 h-4" />
+                     <span>Context</span>
+                     {tabs.length > 0 && <span className="absolute top-2 right-3 w-1.5 h-1.5 bg-blue-500 rounded-full" />}
+                 </button>
+             </div>
+          </div>
+      </div>
+
+      {/* Workspace Area - Flex Column to support full-width terminal at bottom */}
+      <div className="flex-1 flex flex-col overflow-hidden relative w-full h-full">
+        
+        {/* Top Columns Section: Sidebar + Main + RightPanel */}
+        <div className="flex-1 flex overflow-hidden w-full relative">
             
-            {/* Timeline */}
-            <div className="flex-1 overflow-hidden relative flex flex-col">
-                <div className="flex-1 overflow-hidden relative">
-                    <ChatTimeline 
-                        chat={activeChat} 
-                        agents={agents}
-                        onOpenTab={handleOpenTab}
-                    />
-                </div>
-            </div>
-            
-            {/* Composer & Terminal Container */}
-            <div className="flex flex-col shrink-0 bg-background z-10">
-                <div className="p-4 border-t border-border">
-                    <Composer 
-                        selectedAgents={agents.filter(a => selectedAgentIds.includes(a.id))}
-                        onRemoveAgent={(id) => {
-                            const newIds = selectedAgentIds.filter(x => x !== id);
-                            updateActiveChatAgents(newIds);
-                        }}
-                        onSend={handleSendMessage}
-                    />
-                </div>
-                
-                <TerminalPanel 
-                    logs={logs}
-                    isOpen={terminalOpen}
-                    onToggle={() => setTerminalOpen(!terminalOpen)}
-                    onClear={() => setLogs([])}
+            {/* Left Sidebar (Chats) */}
+            <div className={cn(
+                "md:block transition-all duration-300 ease-in-out bg-background md:bg-transparent",
+                // Desktop Logic
+                leftSidebarOpen ? "md:w-[260px]" : "md:w-0 md:overflow-hidden",
+                // Mobile Logic
+                mobileView === 'chats' ? "absolute inset-0 z-20 w-full" : "hidden md:block"
+            )}>
+                <Sidebar 
+                    chats={chats} 
+                    activeChatId={activeChatId} 
+                    onSelectChat={(id) => {
+                        setActiveChatId(id);
+                        setMobileView('thread');
+                    }}
+                    agents={agents}
+                    selectedAgentIds={selectedAgentIds}
+                    onAgentClick={handleDirectChat}
+                    onNewChat={() => {
+                    const newChat: Chat = {
+                            id: `c-${Date.now()}`,
+                            title: "New Task",
+                            lastActivity: Date.now(),
+                            messages: [],
+                            runs: [],
+                            selectedAgentIds: agents.map(a => a.id)
+                        };
+                        setChats([newChat, ...chats]);
+                        setActiveChatId(newChat.id);
+                        setMobileView('thread'); // Auto switch on new chat
+                    }}
                 />
             </div>
 
-        </main>
+            {/* Center Panel (Timeline + Header) */}
+            <main className={cn(
+                "flex-1 flex flex-col min-w-0 border-r border-border relative w-full h-full bg-background transition-opacity duration-200",
+                mobileView === 'thread' ? "flex opacity-100" : "hidden md:flex md:opacity-100"
+            )}>
+                <header className="h-12 border-b border-border flex items-center px-4 justify-between shrink-0 bg-background hidden md:flex">
+                    {/* Desktop Header Left Controls */}
+                    <div className="flex items-center gap-3">
+                        {!globalNavExpanded && (
+                            <button 
+                                onClick={() => setGlobalNavExpanded(true)}
+                                className="text-muted-foreground hover:text-foreground transition-colors"
+                                title="Expand Navigation"
+                            >
+                                <Layout className="w-4 h-4" />
+                            </button>
+                        )}
+                        <button 
+                            onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
+                            className={cn(
+                                "text-muted-foreground hover:text-foreground transition-colors",
+                                !leftSidebarOpen && "text-primary"
+                            )}
+                            title="Toggle Chat Sidebar"
+                        >
+                            <PanelLeft className="w-4 h-4" />
+                        </button>
+                        <h1 className="font-medium text-sm text-foreground/80 ml-2">{activeChat.title}</h1>
+                    </div>
 
-        {/* Right Panel (Artifacts) */}
-        {rightSidebarOpen && (
-            <RightPanel 
-                tabs={tabs}
-                activeTabId={activeTabId}
-                onCloseTab={(id) => {
-                    setTabs(prev => prev.filter(t => t.id !== id));
-                    if (activeTabId === id) setActiveTabId(null);
-                }}
-                onSelectTab={setActiveTabId}
-            />
-        )}
+                    {/* Desktop Header Right Controls */}
+                    <div className="flex items-center gap-3">
+                        <button 
+                            onClick={() => setGlobalNavExpanded(!globalNavExpanded)}
+                            className={cn(
+                                "text-muted-foreground hover:text-foreground transition-colors",
+                                !globalNavExpanded && "hidden"
+                            )}
+                            title="Collapse Navigation"
+                        >
+                            <Minimize2 className="w-3.5 h-3.5" />
+                        </button>
+                        
+                        <button 
+                            onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
+                            className={cn(
+                                "text-muted-foreground hover:text-foreground transition-colors",
+                                !rightSidebarOpen && "text-primary"
+                            )}
+                            title="Toggle Artifacts Panel"
+                        >
+                            <PanelRight className="w-4 h-4" />
+                        </button>
+                    </div>
+                </header>
+                
+                {/* Timeline */}
+                <div className="flex-1 overflow-hidden relative flex flex-col">
+                    <div className="flex-1 overflow-hidden relative">
+                        <ChatTimeline 
+                            chat={activeChat} 
+                            agents={agents}
+                            onOpenTab={handleOpenTab}
+                        />
+                    </div>
+                </div>
+                
+                {/* Composer Container */}
+                <div className="flex flex-col shrink-0 bg-background z-10">
+                    <div className="p-4 border-t border-border">
+                        <Composer 
+                            selectedAgents={agents.filter(a => selectedAgentIds.includes(a.id))}
+                            allAgents={agents}
+                            onRemoveAgent={(id) => {
+                                const newIds = selectedAgentIds.filter(x => x !== id);
+                                updateActiveChatAgents(newIds);
+                            }}
+                            onAddAgent={handleAddAgent}
+                            onSend={handleSendMessage}
+                        />
+                    </div>
+                </div>
+            </main>
+
+            {/* Right Panel (Artifacts) */}
+            <div className={cn(
+                "md:flex transition-all duration-300 ease-in-out bg-background md:bg-transparent",
+                // Desktop Logic
+                rightSidebarOpen ? "md:w-[400px]" : "md:w-0 md:overflow-hidden",
+                // Mobile Logic
+                mobileView === 'artifacts' ? "absolute inset-0 z-20 w-full" : "hidden md:flex"
+            )}>
+                <RightPanel 
+                    tabs={tabs}
+                    activeTabId={activeTabId}
+                    onCloseTab={(id) => {
+                        setTabs(prev => prev.filter(t => t.id !== id));
+                        if (activeTabId === id) setActiveTabId(null);
+                        if (tabs.length <= 1) setMobileView('thread'); // Auto close if last tab
+                    }}
+                    onSelectTab={setActiveTabId}
+                />
+            </div>
+
+        </div>
+
+        {/* Terminal Section - Full Width Bottom Drawer */}
+        <div className="shrink-0 z-30 bg-background w-full">
+            {/* Expanded Content Container */}
+            <div className={cn(
+                "transition-all duration-300 ease-in-out border-t border-border overflow-hidden",
+                terminalOpen ? "h-[33vh] md:h-[250px]" : "h-0 border-t-0"
+            )}>
+                 <TerminalPanel 
+                    logs={logs}
+                    isOpen={true}
+                    onToggle={() => setTerminalOpen(false)}
+                    onClear={() => setLogs([])}
+                    className="h-full border-t-0" 
+                 />
+            </div>
+            
+            {/* Collapsed Bar - Desktop Only (Mobile uses header button) */}
+             {!terminalOpen && (
+                <div className="hidden md:block">
+                    <TerminalPanel 
+                        logs={logs}
+                        isOpen={false}
+                        onToggle={() => setTerminalOpen(true)}
+                        onClear={() => setLogs([])}
+                        className="border-t border-border"
+                    />
+                </div>
+            )}
+        </div>
+
       </div>
     </div>
   );
 }
 
-function Composer({ selectedAgents, onRemoveAgent, onSend }: { selectedAgents: Agent[], onRemoveAgent: (id: string) => void, onSend: (text: string) => void }) {
+function Composer({ selectedAgents, allAgents, onRemoveAgent, onAddAgent, onSend }: { 
+    selectedAgents: Agent[], 
+    allAgents: Agent[],
+    onRemoveAgent: (id: string) => void, 
+    onAddAgent: (id: string) => void,
+    onSend: (text: string) => void 
+}) {
     const [text, setText] = useState("");
+    const [isAgentSelectorOpen, setIsAgentSelectorOpen] = useState(false);
     
+    // Filter out agents that are already selected
+    const availableAgents = allAgents.filter(a => !selectedAgents.some(sa => sa.id === a.id));
+
     return (
-        <div className="flex flex-col gap-2 bg-muted/30 p-3 rounded-lg border border-border focus-within:ring-1 focus-within:ring-ring transition-all">
-            {selectedAgents.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-1">
-                    {selectedAgents.map(agent => (
-                        <span key={agent.id} className="inline-flex items-center gap-1 bg-background/50 border border-border rounded-full px-2 py-0.5 text-xs text-muted-foreground select-none">
-                            <span className={cn("w-1.5 h-1.5 rounded-full", agent.color)} />
-                            {agent.name}
-                            <button onClick={() => onRemoveAgent(agent.id)} className="hover:text-foreground ml-0.5">×</button>
-                        </span>
-                    ))}
+        <div className="flex flex-col gap-2 bg-muted/30 p-3 rounded-lg border border-border focus-within:ring-1 focus-within:ring-ring transition-all relative">
+            
+            {/* Agent Pills Row */}
+            <div className="flex flex-wrap gap-1.5 mb-1 items-center">
+                {selectedAgents.map(agent => (
+                    <span key={agent.id} className="inline-flex items-center gap-1 bg-background/50 border border-border rounded-full px-2 py-0.5 text-xs text-muted-foreground select-none">
+                        <span className={cn("w-1.5 h-1.5 rounded-full", agent.color)} />
+                        {agent.name}
+                        <button onClick={() => onRemoveAgent(agent.id)} className="hover:text-foreground ml-0.5">×</button>
+                    </span>
+                ))}
+                
+                {/* Add Agent Button */}
+                <div className="relative">
+                    <button 
+                        onClick={() => setIsAgentSelectorOpen(!isAgentSelectorOpen)}
+                        className={cn(
+                            "inline-flex items-center gap-1 border border-dashed border-muted-foreground/40 hover:border-muted-foreground/80 rounded-full px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors",
+                            isAgentSelectorOpen && "bg-muted text-foreground border-solid"
+                        )}
+                        title="Add Agent to chat"
+                    >
+                        <Plus className="w-3 h-3" />
+                        <span>Add</span>
+                    </button>
+
+                    {/* Agent Selector Dropdown */}
+                    {isAgentSelectorOpen && (
+                        <>
+                            <div 
+                                className="fixed inset-0 z-40" 
+                                onClick={() => setIsAgentSelectorOpen(false)} 
+                            />
+                            <div className="absolute left-0 bottom-full mb-2 w-48 bg-popover border border-border shadow-lg rounded-md overflow-hidden z-50 flex flex-col py-1">
+                                <div className="px-2 py-1.5 text-[10px] uppercase font-bold text-muted-foreground border-b border-border/50 mb-1">
+                                    Available Agents
+                                </div>
+                                {availableAgents.length === 0 ? (
+                                    <div className="px-3 py-2 text-xs text-muted-foreground italic">
+                                        All agents selected
+                                    </div>
+                                ) : (
+                                    availableAgents.map(agent => (
+                                        <button
+                                            key={agent.id}
+                                            onClick={() => {
+                                                onAddAgent(agent.id);
+                                                setIsAgentSelectorOpen(false);
+                                            }}
+                                            className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted/50 text-left transition-colors"
+                                        >
+                                            <div className={cn("w-2 h-2 rounded-full", agent.color)} />
+                                            <span>{agent.name}</span>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        </>
+                    )}
                 </div>
-            )}
+            </div>
+
             <div className="flex gap-2">
                  <textarea 
                     className="flex-1 bg-transparent resize-none outline-none text-sm min-h-[40px] max-h-[200px]" 
@@ -408,7 +615,8 @@ function Composer({ selectedAgents, onRemoveAgent, onSend }: { selectedAgents: A
                  <div className="flex gap-2">
                     {/* Removed @ Mention button */}
                  </div>
-                 <span>⌘ Enter to send</span>
+                 <span className="hidden md:inline">⌘ Enter to send</span>
+                 <span className="md:hidden">Tap to send</span>
             </div>
         </div>
     )

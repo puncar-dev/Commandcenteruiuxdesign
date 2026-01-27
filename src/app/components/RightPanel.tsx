@@ -16,7 +16,7 @@ export default function RightPanel({ tabs, activeTabId, onCloseTab, onSelectTab 
 
   if (tabs.length === 0) {
     return (
-        <div className="w-[400px] border-l border-border bg-muted/5 flex items-center justify-center text-muted-foreground text-sm shrink-0 select-none hidden md:flex">
+        <div className="w-full md:w-[400px] border-l border-border bg-muted/5 flex items-center justify-center text-muted-foreground text-sm shrink-0 select-none h-full">
             <div className="text-center p-6 opacity-50">
                 <p>No artifacts open</p>
                 <p className="text-xs mt-1">Click an action in chat to open details</p>
@@ -26,7 +26,7 @@ export default function RightPanel({ tabs, activeTabId, onCloseTab, onSelectTab 
   }
 
   return (
-    <div className="w-[400px] border-l border-border bg-background flex flex-col shrink-0 hidden md:flex">
+    <div className="w-full md:w-[400px] border-l border-border bg-background flex flex-col shrink-0 h-full">
       {/* Tabs Header */}
       <div className="flex items-center overflow-x-auto border-b border-border bg-muted/10 no-scrollbar">
         {tabs.map(tab => (

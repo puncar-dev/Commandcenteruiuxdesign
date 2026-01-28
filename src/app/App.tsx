@@ -19,10 +19,54 @@ import type { Chat, Agent, Run, Message, Tab, TabType } from "@/types";
 // --- Mock Data ---
 
 const INITIAL_AGENTS: Agent[] = [
-  { id: "a1", name: "Market Maker", role: "Trader", status: "idle", color: "bg-blue-500", avatar: "MM" },
-  { id: "a2", name: "Risk Guard", role: "Risk", status: "idle", color: "bg-red-500", avatar: "RG" },
-  { id: "a3", name: "Sentiment", role: "Researcher", status: "idle", color: "bg-purple-500", avatar: "SE" },
-  { id: "a4", name: "Exec", role: "Execution", status: "idle", color: "bg-green-500", avatar: "EX" },
+  { 
+      id: "a1", 
+      name: "Market Maker", 
+      role: "Trader", 
+      status: "idle", 
+      color: "bg-blue-500", 
+      avatar: "MM",
+      pnl: 420.50,
+      pnl24h: 12.3,
+      activePositions: 3,
+      lastActivity: Date.now() - 1000 * 60 * 16 // 16m
+  },
+  { 
+      id: "a2", 
+      name: "Risk Guard", 
+      role: "Risk", 
+      status: "idle", 
+      color: "bg-red-500", 
+      avatar: "RG",
+      pnl: -52.00,
+      pnl24h: -8.1,
+      activePositions: 0,
+      lastActivity: Date.now() - 1000 * 60 * 60 // 1h
+  },
+  { 
+      id: "a3", 
+      name: "Sentiment", 
+      role: "Researcher", 
+      status: "idle", 
+      color: "bg-purple-500", 
+      avatar: "SE",
+      pnl: 1250.00,
+      pnl24h: 5.2,
+      activePositions: 5,
+      lastActivity: Date.now() - 1000 * 60 * 19 // 19m
+  },
+  { 
+      id: "a4", 
+      name: "Exec", 
+      role: "Execution", 
+      status: "idle", 
+      color: "bg-green-500", 
+      avatar: "EX",
+      pnl: 89.00,
+      pnl24h: 1.2,
+      activePositions: 1,
+      lastActivity: Date.now() - 1000 * 60 * 60 * 24 // 1d
+  },
 ];
 
 const INITIAL_CHATS: Chat[] = [
@@ -34,7 +78,7 @@ const INITIAL_CHATS: Chat[] = [
       { id: "m1", role: "user", content: "Analyze the latest Particle Props proposal.", timestamp: Date.now() - 100000 }
     ],
     runs: [],
-    selectedAgentIds: ["a1", "a2"] // Default initial selection for this chat
+    selectedAgentIds: ["a1", "a2", "a3", "a4"] // All agents
   },
   {
     id: "c2",
@@ -42,7 +86,7 @@ const INITIAL_CHATS: Chat[] = [
     lastActivity: Date.now() - 86400000,
     messages: [],
     runs: [],
-    selectedAgentIds: ["a3", "a4"] // Different default for this chat
+    selectedAgentIds: ["a1", "a2", "a3", "a4"] // All agents
   }
 ];
 
@@ -52,6 +96,7 @@ import ChatTimeline from "@/app/components/ChatTimeline";
 import RightPanel from "@/app/components/RightPanel";
 import TerminalPanel, { TerminalLog, LogCategory } from "@/app/components/TerminalPanel";
 import GlobalNavigation from "@/app/components/GlobalNavigation";
+import Composer from "@/app/components/Composer";
 
 type MobileView = 'chats' | 'thread' | 'artifacts';
 
@@ -103,6 +148,7 @@ export default function App() {
     const agent = agents.find(a => a.id === agentId);
     if (!agent) return;
 
+    // Check if DM exists
     const existingChat = chats.find(c => 
         c.selectedAgentIds.length === 1 && 
         c.selectedAgentIds[0] === agentId &&
@@ -139,11 +185,15 @@ export default function App() {
     };
 
     // 2. Create Run
+    // If we are in a group chat, we use all agents. 
+    // If in a DM, we use the specific agent.
+    const runAgentIds = activeChat.selectedAgentIds.length > 0 ? activeChat.selectedAgentIds : agents.map(a => a.id);
+
     const newRun: Run = {
       id: `run-${Date.now()}`,
       timestamp: Date.now(),
       prompt: text,
-      agentIds: [...selectedAgentIds],
+      agentIds: runAgentIds,
       status: "running",
       outputs: {}
     };
@@ -162,7 +212,7 @@ export default function App() {
 
     // 4. Set Agents to Working
     setAgents(prev => prev.map(a => 
-      selectedAgentIds.includes(a.id) ? { ...a, status: "working" } : a
+      runAgentIds.includes(a.id) ? { ...a, status: "working" } : a
     ));
     
     // Auto-open terminal on run
@@ -170,35 +220,35 @@ export default function App() {
     addLog(`Run started: ${text.substring(0, 30)}...`, 'System', 'info', 'system');
 
     // 5. Simulate Agent Responses (Mock)
-    if (selectedAgentIds.length > 0) {
+    if (runAgentIds.length > 0) {
         // Simulate some "moves" / logs with different categories
         setTimeout(() => {
-            addLog("Fetching market data for potential entry...", selectedAgentIds[0], 'info', 'analysis');
+            addLog("Fetching market data for potential entry...", runAgentIds[0], 'info', 'analysis');
         }, 500);
 
         setTimeout(() => {
-            addLog("Scanning recent X posts for ticker mentions...", selectedAgentIds[0], 'info', 'post');
+            addLog("Scanning recent X posts for ticker mentions...", runAgentIds[0], 'info', 'post');
         }, 800);
 
         setTimeout(() => {
             // First completion
-            completeRunPartial(newRun.id, selectedAgentIds[0], "I've analyzed the market structure. It looks bullish.");
-            addLog("Market structure analysis complete. Bias: Bullish", selectedAgentIds[0], 'success', 'analysis');
-            addLog("Resistance at 45k confirmed by order book.", selectedAgentIds[0], 'info', 'analysis');
+            completeRunPartial(newRun.id, runAgentIds[0], "I've analyzed the market structure. It looks bullish.");
+            addLog("Market structure analysis complete. Bias: Bullish", runAgentIds[0], 'success', 'analysis');
+            addLog("Resistance at 45k confirmed by order book.", runAgentIds[0], 'info', 'analysis');
         }, 1500);
 
-        if (selectedAgentIds.length > 1) {
+        if (runAgentIds.length > 1) {
              setTimeout(() => {
-                addLog("Evaluating risk exposure for current portfolio...", selectedAgentIds[1], 'warning', 'analysis');
+                addLog("Evaluating risk exposure for current portfolio...", runAgentIds[1], 'warning', 'analysis');
             }, 2000);
 
             setTimeout(() => {
                 // Second completion
-                completeRunPartial(newRun.id, selectedAgentIds[1], "Risk parameters are within safe limits. Recommend 5% allocation.");
-                addLog("Risk check passed. Allocation recommended: 5%", selectedAgentIds[1], 'success', 'analysis');
+                completeRunPartial(newRun.id, runAgentIds[1], "Risk parameters are within safe limits. Recommend 5% allocation.");
+                addLog("Risk check passed. Allocation recommended: 5%", runAgentIds[1], 'success', 'analysis');
                 
                 // Simulate a "Trade" log
-                addLog("EXECUTING BUY ORDER: BTC-PERP @ 65420 Size: 0.5 BTC", selectedAgentIds[1], 'success', 'trade');
+                addLog("EXECUTING BUY ORDER: BTC-PERP @ 65420 Size: 0.5 BTC", runAgentIds[1], 'success', 'trade');
             }, 2500);
         }
     }
@@ -267,9 +317,18 @@ export default function App() {
       }
   };
 
+  const handleAgentSettings = (agentId: string) => {
+      const agent = agents.find(a => a.id === agentId);
+      if (!agent) return;
+      handleOpenTab('agent-settings', `${agent.name} Settings`, { agentId });
+  };
+
+  // Determine the default filter for the terminal based on the active chat
+  const terminalFilterId = activeChat.selectedAgentIds.length === 1 ? activeChat.selectedAgentIds[0] : 'all';
+
   return (
     <div className="flex h-screen w-full bg-background text-foreground overflow-hidden font-sans flex-col md:flex-row pb-16 md:pb-0">
-      <GlobalNavigation activeItem="Command Center" collapsed={!globalNavExpanded} />
+      <GlobalNavigation activeItem="Agents" collapsed={!globalNavExpanded} />
       
       {/* Mobile Header (Persistent) */}
       <div className="md:hidden flex flex-col border-b border-border bg-background shrink-0 z-50">
@@ -370,6 +429,7 @@ export default function App() {
                         setActiveChatId(newChat.id);
                         setMobileView('thread'); // Auto switch on new chat
                     }}
+                    onAgentSettings={handleAgentSettings}
                 />
             </div>
 
@@ -444,14 +504,8 @@ export default function App() {
                 <div className="flex flex-col shrink-0 bg-background z-10">
                     <div className="p-4 border-t border-border">
                         <Composer 
-                            selectedAgents={agents.filter(a => selectedAgentIds.includes(a.id))}
-                            allAgents={agents}
-                            onRemoveAgent={(id) => {
-                                const newIds = selectedAgentIds.filter(x => x !== id);
-                                updateActiveChatAgents(newIds);
-                            }}
-                            onAddAgent={handleAddAgent}
                             onSend={handleSendMessage}
+                            agents={agents}
                         />
                     </div>
                 </div>
@@ -463,7 +517,7 @@ export default function App() {
                 // Desktop Logic
                 rightSidebarOpen ? "md:w-[400px]" : "md:w-0 md:overflow-hidden",
                 // Mobile Logic
-                mobileView === 'artifacts' ? "absolute inset-0 z-20 w-full" : "hidden md:flex"
+                mobileView === 'artifacts' ? "absolute inset-0 z-20 w-full md:static md:inset-auto" : "hidden md:flex"
             )}>
                 <RightPanel 
                     tabs={tabs}
@@ -488,10 +542,12 @@ export default function App() {
             )}>
                  <TerminalPanel 
                     logs={logs}
+                    agents={agents}
                     isOpen={true}
                     onToggle={() => setTerminalOpen(false)}
                     onClear={() => setLogs([])}
                     className="h-full border-t-0" 
+                    defaultAgentId={terminalFilterId}
                  />
             </div>
             
@@ -500,10 +556,12 @@ export default function App() {
                 <div className="hidden md:block">
                     <TerminalPanel 
                         logs={logs}
+                        agents={agents}
                         isOpen={false}
                         onToggle={() => setTerminalOpen(true)}
                         onClear={() => setLogs([])}
                         className="border-t border-border"
+                        defaultAgentId={terminalFilterId}
                     />
                 </div>
             )}
@@ -514,110 +572,3 @@ export default function App() {
   );
 }
 
-function Composer({ selectedAgents, allAgents, onRemoveAgent, onAddAgent, onSend }: { 
-    selectedAgents: Agent[], 
-    allAgents: Agent[],
-    onRemoveAgent: (id: string) => void, 
-    onAddAgent: (id: string) => void,
-    onSend: (text: string) => void 
-}) {
-    const [text, setText] = useState("");
-    const [isAgentSelectorOpen, setIsAgentSelectorOpen] = useState(false);
-    
-    // Filter out agents that are already selected
-    const availableAgents = allAgents.filter(a => !selectedAgents.some(sa => sa.id === a.id));
-
-    return (
-        <div className="flex flex-col gap-2 bg-muted/30 p-3 rounded-lg border border-border focus-within:ring-1 focus-within:ring-ring transition-all relative">
-            
-            {/* Agent Pills Row */}
-            <div className="flex flex-wrap gap-1.5 mb-1 items-center">
-                {selectedAgents.map(agent => (
-                    <span key={agent.id} className="inline-flex items-center gap-1 bg-background/50 border border-border rounded-full px-2 py-0.5 text-xs text-muted-foreground select-none">
-                        <span className={cn("w-1.5 h-1.5 rounded-full", agent.color)} />
-                        {agent.name}
-                        <button onClick={() => onRemoveAgent(agent.id)} className="hover:text-foreground ml-0.5">×</button>
-                    </span>
-                ))}
-                
-                {/* Add Agent Button */}
-                <div className="relative">
-                    <button 
-                        onClick={() => setIsAgentSelectorOpen(!isAgentSelectorOpen)}
-                        className={cn(
-                            "inline-flex items-center gap-1 border border-dashed border-muted-foreground/40 hover:border-muted-foreground/80 rounded-full px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors",
-                            isAgentSelectorOpen && "bg-muted text-foreground border-solid"
-                        )}
-                        title="Add Agent to chat"
-                    >
-                        <Plus className="w-3 h-3" />
-                        <span>Add</span>
-                    </button>
-
-                    {/* Agent Selector Dropdown */}
-                    {isAgentSelectorOpen && (
-                        <>
-                            <div 
-                                className="fixed inset-0 z-40" 
-                                onClick={() => setIsAgentSelectorOpen(false)} 
-                            />
-                            <div className="absolute left-0 bottom-full mb-2 w-48 bg-popover border border-border shadow-lg rounded-md overflow-hidden z-50 flex flex-col py-1">
-                                <div className="px-2 py-1.5 text-[10px] uppercase font-bold text-muted-foreground border-b border-border/50 mb-1">
-                                    Available Agents
-                                </div>
-                                {availableAgents.length === 0 ? (
-                                    <div className="px-3 py-2 text-xs text-muted-foreground italic">
-                                        All agents selected
-                                    </div>
-                                ) : (
-                                    availableAgents.map(agent => (
-                                        <button
-                                            key={agent.id}
-                                            onClick={() => {
-                                                onAddAgent(agent.id);
-                                                setIsAgentSelectorOpen(false);
-                                            }}
-                                            className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted/50 text-left transition-colors"
-                                        >
-                                            <div className={cn("w-2 h-2 rounded-full", agent.color)} />
-                                            <span>{agent.name}</span>
-                                        </button>
-                                    ))
-                                )}
-                            </div>
-                        </>
-                    )}
-                </div>
-            </div>
-
-            <div className="flex gap-2">
-                 <textarea 
-                    className="flex-1 bg-transparent resize-none outline-none text-sm min-h-[40px] max-h-[200px]" 
-                    placeholder="Ask the swarm..."
-                    value={text}
-                    onChange={e => setText(e.target.value)}
-                    onKeyDown={e => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            onSend(text);
-                            setText("");
-                        }
-                    }}
-                />
-                <button 
-                    onClick={() => { onSend(text); setText(""); }}
-                    className="self-end p-1.5 bg-primary text-primary-foreground rounded-md hover:opacity-90 transition-opacity flex items-center justify-center"
-                >
-                    <div className="w-4 h-4 text-center text-xs leading-none flex items-center justify-center">↑</div>
-                </button>
-            </div>
-            <div className="flex justify-between items-center text-[10px] text-muted-foreground pt-1">
-                 <div className="flex gap-2">
-                    {/* Removed @ Mention button */}
-                 </div>
-                 <span className="hidden md:inline">⌘ Enter to send</span>
-                 <span className="md:hidden">Tap to send</span>
-            </div>
-        </div>
-    )
-}

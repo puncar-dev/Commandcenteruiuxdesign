@@ -26,7 +26,6 @@ export default function GlobalNavigation({ activeItem = "Command Center", onNavi
     { name: "Markets", icon: TrendingUp },
     { name: "Chats", icon: MessageCircle },
     { name: "Agents", icon: Bot },
-    { name: "Command Center", icon: Users },
     { name: "Rewards", icon: Gift },
     { name: "Profile", icon: User },
   ];
@@ -107,7 +106,7 @@ export default function GlobalNavigation({ activeItem = "Command Center", onNavi
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-background border-t border-border flex items-center justify-around px-2 z-50 pb-safe">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-[calc(3.5rem+env(safe-area-inset-bottom))] bg-background/80 backdrop-blur-md border-t border-border flex items-start justify-around px-2 z-50 pb-[env(safe-area-inset-bottom)]">
         {navItems.slice(0, 5).map((item) => { // Show first 5 items on mobile to avoid crowding
           const isActive = item.name === activeItem;
           return (

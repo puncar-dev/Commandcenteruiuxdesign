@@ -7,6 +7,11 @@ export interface Agent {
   status: AgentStatus;
   avatar: string; 
   color: string;
+  // Performance Metrics
+  pnl: number;           // Total P&L in points/credits
+  pnl24h: number;        // Percentage change
+  activePositions: number;
+  lastActivity: number;  // Timestamp
 }
 
 export type RunStatus = "running" | "completed" | "partial" | "failed";
@@ -37,7 +42,7 @@ export interface Chat {
   selectedAgentIds: string[];
 }
 
-export type TabType = "market" | "agent" | "doc" | "empty";
+export type TabType = "market" | "agent" | "doc" | "agent-settings" | "empty";
 
 export interface Tab {
   id: string;
